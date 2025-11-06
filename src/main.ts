@@ -9,14 +9,13 @@ const CANVAS_WIDTH = 800;
 const CANVAS_HEIGHT = 600;
 const PLAYER_SPEED = 5;
 const BULLET_SPEED = 7;
-const INVADER_SPEED = 1;
-const INVADER_ROWS = 5;
-const INVADER_COLS = 10;
 
 // Game state
 let score = 0;
 let gameOver = false;
 let gameStarted = false;
+let currentLevel = 1;
+let levelComplete = false;
 
 // Player
 const player = {
@@ -35,6 +34,9 @@ const bullets: { x: number; y: number; width: number; height: number }[] = [];
 const invaders: { x: number; y: number; width: number; height: number; alive: boolean }[] = [];
 let invaderDirection = 1;
 let invaderDropDistance = 0;
+let invaderSpeed = 1;
+let invaderRows = 5;
+let invaderCols = 10;
 
 // Input state
 const keys: { [key: string]: boolean } = {};
@@ -47,19 +49,21 @@ function init() {
   app.innerHTML = '';
   app.appendChild(canvas);
 
-  // Create invaders
+  // Create invaders for first level
   createInvaders();
 
   // Event listeners
   document.addEventListener('keydown', (e) => {
     keys[e.key] = true;
     
-    // Handle space bar for starting/restarting game
+    // Handle space bar for starting/restarting game and advancing levels
     if (e.key === ' ') {
       if (!gameStarted) {
         startGame();
       } else if (gameOver) {
         restartGame();
+      } else if (levelComplete) {
+        advanceToNextLevel();
       }
     }
   });
@@ -74,13 +78,33 @@ function init() {
 
 function createInvaders() {
   invaders.length = 0;
-  for (let row = 0; row < INVADER_ROWS; row++) {
-    for (let col = 0; col < INVADER_COLS; col++) {
+  
+  // Configure level difficulty
+  switch(currentLevel) {
+    case 1:
+      invaderRows = 5;
+      invaderCols = 10;
+      invaderSpeed = 1;
+      break;
+    case 2:
+      invaderRows = 6;
+      invaderCols = 11;
+      invaderSpeed = 1.5;
+      break;
+    case 3:
+      invaderRows = 7;
+      invaderCols = 12;
+      invaderSpeed = 2;
+      break;
+  }
+  
+  for (let row = 0; row < invaderRows; row++) {
+    for (let col = 0; col < invaderCols; col++) {
       invaders.push({
-        x: col * 60 + 50,
-        y: row * 50 + 50,
-        width: 40,
-        height: 30,
+        x: col * 55 + 30,
+        y: row * 45 + 30,
+        width: 35,
+        height: 25,
         alive: true
       });
     }
@@ -90,13 +114,24 @@ function createInvaders() {
 function startGame() {
   gameStarted = true;
   gameOver = false;
+  levelComplete = false;
+  currentLevel = 1;
   score = 0;
   resetGame();
 }
 
 function restartGame() {
   gameOver = false;
+  levelComplete = false;
+  currentLevel = 1;
   score = 0;
+  resetGame();
+}
+
+function advanceToNextLevel() {
+  currentLevel++;
+  levelComplete = false;
+  gameOver = false;
   resetGame();
 }
 
@@ -107,7 +142,7 @@ function resetGame() {
   // Clear bullets
   bullets.length = 0;
   
-  // Reset invaders
+  // Reset invaders with current level configuration
   createInvaders();
   
   invaderDirection = 1;
@@ -115,7 +150,7 @@ function resetGame() {
 }
 
 function gameLoop() {
-  if (!gameOver && gameStarted) {
+  if (!gameOver && gameStarted && !levelComplete) {
     update();
   }
   draw();
@@ -132,7 +167,7 @@ function update() {
   }
 
   // Shooting (only if game is active)
-  if (keys[' '] && bullets.length < 3 && !gameOver) {
+  if (keys[' '] && bullets.length < 3 && !gameOver && !levelComplete) {
     bullets.push({
       x: player.x + player.width / 2 - 2,
       y: player.y,
@@ -157,7 +192,7 @@ function update() {
       if (invaders[j].alive && checkCollision(bullets[i], invaders[j])) {
         invaders[j].alive = false;
         bullets.splice(i, 1);
-        score += 10;
+        score += 10 * currentLevel; // More points in higher levels
         break;
       }
     }
@@ -190,10 +225,10 @@ function update() {
       }
     }
   } else {
-    // Move invaders horizontally
+    // Move invaders horizontally with level-based speed
     for (const invader of invaders) {
       if (invader.alive) {
-        invader.x += INVADER_SPEED * invaderDirection;
+        invader.x += invaderSpeed * invaderDirection;
       }
     }
   }
@@ -206,9 +241,9 @@ function update() {
     }
   }
 
-  // Check win condition
+  // Check win condition - level complete
   if (allDead) {
-    gameOver = true;
+    levelComplete = true;
   }
 }
 
@@ -242,10 +277,18 @@ function draw() {
     ctx.fillRect(bullet.x, bullet.y, bullet.width, bullet.height);
   }
 
-  // Draw invaders
+  // Draw invaders with level-based colors
   for (const invader of invaders) {
     if (invader.alive) {
-      ctx.fillStyle = '#f00';
+      // Different colors for different levels
+      if (currentLevel === 1) {
+        ctx.fillStyle = '#f00'; // Red for level 1
+      } else if (currentLevel === 2) {
+        ctx.fillStyle = '#ff0'; // Yellow for level 2
+      } else {
+        ctx.fillStyle = '#0ff'; // Cyan for level 3+
+      }
+      
       ctx.fillRect(invader.x, invader.y, invader.width, invader.height);
       
       // Draw invader details
@@ -256,13 +299,31 @@ function draw() {
     }
   }
 
-  // Draw score
+  // Draw score and level info
   ctx.fillStyle = '#fff';
   ctx.font = '20px Arial';
   ctx.textAlign = 'left';
   ctx.fillText(`Score: ${score}`, 10, 30);
+  ctx.fillText(`Level: ${currentLevel}`, 10, 60);
 
-  // Draw game over
+  // Draw level complete screen
+  if (levelComplete) {
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    
+    ctx.fillStyle = '#0f0';
+    ctx.font = '48px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('LEVEL COMPLETE!', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 - 50);
+    
+    ctx.fillStyle = '#fff';
+    ctx.font = '24px Arial';
+    ctx.fillText(`Score: ${score}`, CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
+    ctx.fillText(`Advancing to Level ${currentLevel + 1}`, CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 30);
+    ctx.fillText('Press SPACE to continue', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 70);
+  }
+
+  // Draw game over screen
   if (gameOver) {
     ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
@@ -270,17 +331,12 @@ function draw() {
     ctx.fillStyle = '#fff';
     ctx.font = '48px Arial';
     ctx.textAlign = 'center';
-    
-    const allDead = invaders.every(invader => !invader.alive);
-    if (allDead) {
-      ctx.fillText('YOU WIN!', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 - 50);
-    } else {
-      ctx.fillText('GAME OVER', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 - 50);
-    }
+    ctx.fillText('GAME OVER', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 - 50);
     
     ctx.font = '24px Arial';
     ctx.fillText(`Final Score: ${score}`, CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
-    ctx.fillText('Press SPACE to play again', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 50);
+    ctx.fillText(`Level Reached: ${currentLevel}`, CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 30);
+    ctx.fillText('Press SPACE to play again', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 70);
   }
 }
 
